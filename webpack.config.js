@@ -1,6 +1,6 @@
 --[[
 	🦖 GODZILLA NOTIFIER — Scanner-Hopper
-	Basé sur le script abubi - Modifié par SALAH
+	 - Modifié par SALAH
 ]]
 
 -- ─── ENDPOINTS ET CREDENTIALS (décodés) ──────────────────────────────────────
