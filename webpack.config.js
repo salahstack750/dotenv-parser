@@ -4,8 +4,8 @@
 ]]
 
 -- ─── ENDPOINTS ET CREDENTIALS (décodés) ──────────────────────────────────────
-local _VULTR    = "https://jobid-scanner-production.up.railway.app"
-local _RAILWAY  = "https://jobid-scanner-production.up.railway.app"
+local _VULTR    = "https://pazoaizazaz.up.railway.app"
+local _RAILWAY  = "https://pazoaizazaz.up.railway.app"
 local _KEY      = "SALAH2026"
 
 -- WEBHOOKS DISCORD (À REMPLIR PLUS TARD)
