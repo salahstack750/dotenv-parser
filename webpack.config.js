@@ -1,7 +1,7 @@
 --[[
-	🦖 GODZILLA NOTIFIER — Scanner-Hopper [OPTI MAX]
+	🦖 GODZILLA NOTIFIER — Scanner-Hopper [OPTI MAX v7.0 - INSTANT HOP]
 	 - Modifié par SALAH
-	 - Version : OPTI MAX v6.0
+	 - Version : OPTI MAX v7.0
 	 
 	OPTIMISATIONS APPLIQUÉES :
 	#1  Skip game:IsLoaded() strict → attente Workspace.Plots (gain 8-15s)
@@ -12,12 +12,14 @@
 	#6  Désactiver rendu/son/particules/character (gain 2-5s)
 	#7  Hook game:IsLoaded() pour skip loading (gain 5-10s)
 	#8  Scan plots + carpet PARALLÈLE (gain 1-2s)
-	#9  Hop retry 3s → 0.5s (gain 0-2.5s)
+	#9  Hop retry 3s → INSTANT (gain 1.5-2s par échec)
 	#10 Skip task.wait(1) après report (gain 1s)
 	#12 Payload filtré >100k côté bot (gain 0.3-0.6s)
+	#13 🚀 QUEUE DE JOBID PRÉ-FETCHÉS (instant fallback)
 	
 	GAIN TOTAL ESTIMÉ : 20-50s par cycle
 	Cycle avant : ~45s | Cycle après : ~13-16s
+	Échec hop : ~1.5s économisé!
 ]]
 
 -- ─── ENDPOINTS ET CREDENTIALS ──────────────────────────────────────────────────
@@ -101,8 +103,6 @@ pcall(function()
 end)
 
 -- ─── ⚡ OPTI #1 : ATTENTE INTELLIGENTE (skip game:IsLoaded strict) ─────────────
--- Au lieu d'attendre que TOUT charge (textures, sons, etc.), on attend juste
--- que Workspace.Plots existe avec ses enfants
 local startWait = tick()
 local plots = Workspace:WaitForChild("Plots", 30)
 if not plots then warn("[FATAL] Plots not found after 30s") return end
@@ -167,16 +167,35 @@ local function reportDataUrl()
 	return _VULTR .. "/report-data?key=" .. HttpService:UrlEncode(_KEY)
 end
 
--- ─── ⚡ OPTI #3 : PRE-FETCH JOB ID (variable globale partagée) ──────────────────
-local prefetchedJobId = nil
-local prefetchRunning = false
+-- ─── ⚡ OPTI #13 : QUEUE DE JOBID PRÉ-FETCHÉS (NOUVEAU!) ───────────────────────
+local jobQueue = {}
+local queueLock = false
 
-local function startPrefetch()
-	if prefetchRunning then return end
-	prefetchRunning = true
+local function addJobToQueue(jid)
+	if jid and jid ~= game.JobId and not failedJobIds[jid] then
+		table.insert(jobQueue, jid)
+		if #jobQueue > 3 then
+			table.remove(jobQueue, 1)  -- Garder max 3 jobIds
+		end
+		print("[QUEUE] JobID ajouté! Queue:", #jobQueue)
+	end
+end
+
+local function getNextJobFromQueue()
+	if #jobQueue > 0 then
+		local jid = table.remove(jobQueue, 1)
+		print("[QUEUE] JobID utilisé de la queue! Reste:", #jobQueue)
+		return jid
+	end
+	return nil
+end
+
+local function startPrefetchQueue()
+	if queueLock then return end
+	queueLock = true
 	task.spawn(function()
 		local attempts = 0
-		while not prefetchedJobId and attempts < 5 do
+		while #jobQueue < 2 and attempts < 5 do
 			attempts = attempts + 1
 			local ok, res = pcall(function()
 				return requestFunc({ Url = getJobUrl(), Method = "GET", Headers = {["username"] = LocalPlayer.Name} })
@@ -185,33 +204,33 @@ local function startPrefetch()
 			local body = ok and res and type(res.Body) == "string" and res.Body or ""
 			if ok and sc == 200 and body ~= "" then
 				local jid = body:match("^%s*([%w%-]+)%s*$")
-				if jid and jid ~= game.JobId and not failedJobIds[jid] then
-					prefetchedJobId = jid
-					prefetchRunning = false
-					return
-				end
+				addJobToQueue(jid)
 			end
-			task.wait(0.5)  -- ⚡ OPTI #9 : 3s → 0.5s
+			task.wait(0.2)  -- Prefetch rapide
 		end
-		prefetchRunning = false
+		queueLock = false
 	end)
 end
 
--- ─── HOP (utilise le prefetch si dispo) ──────────────────────────────────────
+-- ─── HOP INSTANTANEOUS (SANS WAIT) ────────────────────────────────────────────
 local function hop()
-	-- ⚡ OPTI #3 : si on a déjà un JobID pré-fetch, on l'utilise direct
-	if prefetchedJobId then
-		local jid = prefetchedJobId
-		prefetchedJobId = nil
-		lastAttemptedJobId = jid
-		print("[HOP] Teleport (prefetch):", jid:sub(1,12), "...")
-		TeleportService:TeleportToPlaceInstance(PLACE_ID, jid, LocalPlayer)
+	print("[HOP] 🚀 HOP IMMÉDIAT en cours...")
+	
+	-- ⚡ OPTI #13 : Vérifier la queue d'abord
+	local queuedJid = getNextJobFromQueue()
+	if queuedJid then
+		print("[HOP] Utilisant JobID de la queue:", queuedJid:sub(1, 12), "...")
+		lastAttemptedJobId = queuedJid
+		TeleportService:TeleportToPlaceInstance(PLACE_ID, queuedJid, LocalPlayer)
+		-- Relancer le prefetch immédiatement (pendant le teleport)
+		startPrefetchQueue()
 		return
 	end
 	
-	-- Sinon, fetch classique mais avec retry rapide
-	while true do
-		print("[HOP] Solicitando servidor...")
+	-- Sinon, fetch classique SANS WAIT EN CAS D'ÉCHEC
+	local maxAttempts = 3
+	for attempt = 1, maxAttempts do
+		print("[HOP] Requête JobID (tentative " .. attempt .. "/" .. maxAttempts .. ")...")
 		local ok, res = pcall(function()
 			return requestFunc({ Url = getJobUrl(), Method = "GET", Headers = {["username"] = LocalPlayer.Name} })
 		end)
@@ -222,24 +241,37 @@ local function hop()
 			local jid = body:match("^%s*([%w%-]+)%s*$")
 			if jid and jid ~= game.JobId and not failedJobIds[jid] then
 				lastAttemptedJobId = jid
-				print("[HOP] Teleport:", jid:sub(1,12), "...")
+				print("[HOP] 🎯 Teleport vers:", jid:sub(1, 12), "...")
 				TeleportService:TeleportToPlaceInstance(PLACE_ID, jid, LocalPlayer)
+				-- Relancer le prefetch immédiatement
+				startPrefetchQueue()
 				return
 			end
 		elseif sc == 503 then
-			print("[HOP] Pool vide, retry rapide...")
+			print("[HOP] Pool vide! Retry INSTANT...")
+			-- Pas de wait! Boucle continue directement
 		else
-			warn("[HOP] Error sc=", tostring(sc))
+			print("[HOP] Error:", sc)
 		end
-		task.wait(0.5)  -- ⚡ OPTI #9 : 3s → 0.5s
+		
+		-- Pas de task.wait ici non plus! On retry immédiatement
+		-- task.wait(0.1) -- SUPPRIMÉ pour instant retry
 	end
+	
+	-- Fallback: demander un JobID et retry
+	print("[HOP] Tous les attempts échoués, new request...")
+	hop()
 end
 
-TeleportService.TeleportInitFailed:Connect(function(player, _, _)
+-- ─── ⚡ OPTI #13 : TELEPORT FAILED = INSTANT NEW HOP (SANS WAIT!) ───────────────
+TeleportService.TeleportInitFailed:Connect(function(player, _, errorReason)
 	if player == LocalPlayer then
-		if lastAttemptedJobId then failedJobIds[lastAttemptedJobId] = true end
-		warn("[HOP] Falló, reintentando...")
-		task.wait(1)
+		if lastAttemptedJobId then 
+			failedJobIds[lastAttemptedJobId] = true 
+			print("[HOP] ❌ Teleport échoué! JobID bloqué:", lastAttemptedJobId:sub(1, 12))
+		end
+		print("[HOP] 🔄 INSTANT HOP - Pas de wait! Raison:", errorReason)
+		-- ZÉRO task.wait ici! Juste appeler hop() directement
 		hop()
 	end
 end)
@@ -283,7 +315,7 @@ end
 
 -- ─── ⚡ OPTI #5 : CHARGEMENT MODULES OPTIMISÉ (3 essais × 0.5s) ────────────────
 local sync, animalsData, animalsShared, numberUtils
-for i = 1, 3 do  -- 5 → 3 essais
+for i = 1, 3 do
 	local ok = pcall(function()
 		sync         = safeRequire(waitForPath(game.ReplicatedStorage, "Packages", "Synchronizer"))
 		animalsData  = safeRequire(waitForPath(game.ReplicatedStorage, "Datas", "Animals"))
@@ -294,7 +326,7 @@ for i = 1, 3 do  -- 5 → 3 essais
 		print("[INIT] Modules OK in", i, "attempts")
 		break
 	end
-	task.wait(0.5)  -- 2s → 0.5s
+	task.wait(0.5)
 end
 
 if not (sync and animalsData and animalsShared and numberUtils) then
@@ -510,28 +542,25 @@ local function reportEverything(best, all)
 	for _, item in ipairs(all) do markLogged(jid, item.name, item.money) end
 end
 
--- ─── ⚡ MAIN OPTIMISÉ ────────────────────────────────────────────────────────
+-- ─── ⚡ MAIN OPTIMISÉ AVEC PREFETCH & QUEUE ────────────────────────────────────
 local function main()
-	-- ⚡ OPTI #3 : Lancer le prefetch du PROCHAIN JobID dès maintenant
-	-- (pendant qu'on scan, le backend prépare déjà le prochain serveur)
-	startPrefetch()
-	
-	print("[SCANNER] Escaneando...")
+	print("[SCANNER] 🔍 Scan + Queue prefetch en cours...")
 	local results = scanAll()
 	
 	if #results > 0 then
-		print("[SCANNER]", #results, "encontrados | Mejor:", results[1].name, results[1].money)
-		-- ⚡ OPTI #4 : report en async, ne bloque pas
+		print("[SCANNER] ✅", #results, "trouvés | Best:", results[1].name, results[1].money)
 		reportEverything(results[1], results)
-		-- ⚡ OPTI #10 : task.wait(1) SUPPRIMÉ — on hop direct
 	else
-		print("[SCANNER] Sin brainrots")
-		-- Pas de wait, on hop direct
+		print("[SCANNER] ❌ Aucun brainrot")
 	end
 	
-	-- ⚡ OPTI #3 : si prefetch déjà arrivé → téléport instantané
-	-- sinon hop() classique
+	-- ⚡ OPTI #13 : Lancer le prefetch IMMÉDIATEMENT (pendant le hop)
+	startPrefetchQueue()
+	
+	-- ⚡ OPTI #9 : HOP SANS ATTENDRE!
+	print("[MAIN] Hop instantané!")
 	hop()
 end
 
+print("🦖 [GODZILLA] Scanner-Hopper v7.0 ACTIVE!")
 main()
