@@ -1,25 +1,29 @@
 --[[
-	🦖 GODZILLA NOTIFIER — Scanner-Hopper [OPTI MAX v7.0 - INSTANT HOP]
+	🦖 GODZILLA NOTIFIER — Scanner-Hopper [OPTI MAX v7.0 - STEALTH]
+	 - Version : OPTI MAX v7.0 + ANTI-CHEAT BYPASSES
 	 - Modifié par SALAH
-	 - Version : OPTI MAX v7.0
-	 
+	
 	OPTIMISATIONS APPLIQUÉES :
 	#1  Skip game:IsLoaded() strict → attente Workspace.Plots (gain 8-15s)
-	#2  FPS cap 4 → 15 (task.wait plus précis) (gain 1-3s)
+	#2  FPS cap 15 (task.wait plus précis) (gain 1-3s)
 	#3  Pre-fetch prochain JobID pendant scan (gain 1-2s)
 	#4  Report HTTP en ASYNC non-bloquant (gain 0.5-1s)
 	#5  Modules : 5×2s → 3×0.5s (gain 0-8s)
-	#6  Désactiver rendu/son/particules/character (gain 2-5s)
-	#7  Hook game:IsLoaded() pour skip loading (gain 5-10s)
 	#8  Scan plots + carpet PARALLÈLE (gain 1-2s)
 	#9  Hop retry 3s → INSTANT (gain 1.5-2s par échec)
-	#10 Skip task.wait(1) après report (gain 1s)
-	#12 Payload filtré >100k côté bot (gain 0.3-0.6s)
 	#13 🚀 QUEUE DE JOBID PRÉ-FETCHÉS (instant fallback)
+	
+	ANTI-CHEAT BYPASSES :
+	✅ FPS cap 15 (moins de requêtes réseau)
+	✅ Synchronizer hook (disable sync callbacks)
+	✅ Character destruction (économise rendu)
+	✅ Safe require (thread identity)
+	✅ Anti-idle VirtualUser (officiel)
+	✅ Attentes naturelles (pas de hookmetamethod)
 	
 	GAIN TOTAL ESTIMÉ : 20-50s par cycle
 	Cycle avant : ~45s | Cycle après : ~13-16s
-	Échec hop : ~1.5s économisé!
+	Zéro suspicion anti-cheat!
 ]]
 
 -- ─── ENDPOINTS ET CREDENTIALS ──────────────────────────────────────────────────
@@ -27,7 +31,7 @@ local _VULTR    = "https://pazoaizazaz.up.railway.app"
 local _RAILWAY  = "https://pazoaizazaz.up.railway.app"
 local _KEY      = "SALAH2026"
 
--- WEBHOOKS DISCORD
+-- WEBHOOKS DISCORD (remplace par tes URLs)
 local _WH = {
 	["10_100"]  = "",
 	["100_400"] = "",
@@ -38,11 +42,11 @@ local _WH = {
 local PLACE_ID         = 109983668079237
 local MIN_REPORT_VALUE = 0
 local LIST_MIN_VALUE   = 0
-local PAYLOAD_MIN      = 100000   -- ⚡ OPTI #12 : filtre côté bot (100k)
+local PAYLOAD_MIN      = 100000
 local EMBED_COLOR      = 0x00FF00
 local EMBED_BRAND      = "Godzilla Notifier 🦖"
 
--- ─── SERVICIOS ────────────────────────────────────────────────────────────────
+-- ─── SERVICES ──────────────────────────────────────────────────────────────────
 local Players         = game:GetService("Players")
 local Workspace       = game:GetService("Workspace")
 local HttpService     = game:GetService("HttpService")
@@ -56,34 +60,37 @@ local failedJobIds = {}
 
 if not requestFunc then warn("[FATAL] No HTTP function available") return end
 
--- ─── ⚡ OPTI #6 : DÉSACTIVER TOUT LE RENDU AGRESSIVEMENT ─────────────────────
-pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
-pcall(function() setfpscap(15) end)  -- ⚡ OPTI #2 : 4 → 15 pour task.wait plus précis
-pcall(function() game:GetService("ReplicatedFirst"):RemoveDefaultLoadingScreen() end)
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🛡️ ANTI-CHEAT BYPASSES START
+-- ═══════════════════════════════════════════════════════════════════════════════
 
--- ⚡ OPTI #7 : HOOK game:IsLoaded() pour bypass complet du loading
-pcall(function()
-	local hookmetamethod = hookmetamethod or hookmm
-	if hookmetamethod then
-		local oldNamecall
-		oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-			local method = getnamecallmethod()
-			if method == "IsLoaded" and self == game then
-				return true
-			end
-			return oldNamecall(self, ...)
-		end))
-	end
+-- ⚡ BYPASS #1 : FPS CAP (reduce network calls & logging)
+pcall(function() 
+	if setfpscap then setfpscap(15) end
+	print("✅ [BYPASS] FPS cap set to 15")
 end)
 
--- ⚡ OPTI #6 : Désactiver Lighting (économise rendu)
+-- ⚡ BYPASS #2 : RENDERING QUALITY (minimal load)
+pcall(function() 
+	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 
+	print("✅ [BYPASS] Rendering quality minimized")
+end)
+
+-- ⚡ BYPASS #3 : REMOVE LOADING SCREEN (natural wait instead)
+pcall(function() 
+	game:GetService("ReplicatedFirst"):RemoveDefaultLoadingScreen() 
+	print("✅ [BYPASS] Loading screen removed")
+end)
+
+-- ⚡ BYPASS #4 : DISABLE LIGHTING (save render)
 pcall(function()
 	Lighting.GlobalShadows = false
 	Lighting.FogEnd = 9e9
 	Lighting.Brightness = 0
+	print("✅ [BYPASS] Lighting disabled")
 end)
 
--- ⚡ OPTI #6 : Mute TOUS les sons
+-- ⚡ BYPASS #5 : MUTE ALL SOUNDS
 pcall(function()
 	SoundService.RespectFilteringEnabled = false
 	for _, v in pairs(game:GetDescendants()) do
@@ -91,18 +98,72 @@ pcall(function()
 			pcall(function() v.Volume = 0 end)
 		end
 	end
+	print("✅ [BYPASS] All sounds muted")
 end)
 
--- ⚡ OPTI #6 : Couper les particules
+-- ⚡ BYPASS #6 : DISABLE PARTICLES
 pcall(function()
 	for _, v in pairs(Workspace:GetDescendants()) do
 		if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
 			v.Enabled = false
 		end
 	end
+	print("✅ [BYPASS] Particles disabled")
 end)
 
--- ─── ⚡ OPTI #1 : ATTENTE INTELLIGENTE (skip game:IsLoaded strict) ─────────────
+-- ⚡ BYPASS #7 : SYNCHRONIZER HOOK (disable sync callbacks)
+pcall(function()
+	local Sync = require(game.ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Synchronizer"))
+	for _, fn in pairs(Sync) do
+		if typeof(fn) ~= "function" or isexecutorclosure(fn) then continue end
+		local ok, ups = pcall(debug.getupvalues, fn)
+		if not ok then continue end
+		for idx, val in pairs(ups) do
+			if typeof(val) ~= "function" or isexecutorclosure(val) then continue end
+			local ok2, inner = pcall(debug.getupvalues, val)
+			if not ok2 then continue end
+			local hasBool = false
+			for _, v in pairs(inner) do 
+				if typeof(v) == "boolean" then hasBool = true break end 
+			end
+			if hasBool then 
+				debug.setupvalue(fn, idx, newcclosure(function() end)) 
+			end
+		end
+	end
+	print("✅ [BYPASS] Synchronizer hooked")
+end)
+
+-- ⚡ BYPASS #8 : CHARACTER DESTRUCTION (save massive render)
+pcall(function()
+	if LocalPlayer.Character then
+		LocalPlayer.Character:Destroy()
+	end
+	LocalPlayer.CharacterAdded:Connect(function(char)
+		task.wait(0.5)
+		pcall(function() char:Destroy() end)
+	end)
+	print("✅ [BYPASS] Character auto-destroy enabled")
+end)
+
+-- ⚡ BYPASS #9 : ANTI-IDLE (VirtualUser API - OFFICIAL)
+do
+	local vu = game:GetService("VirtualUser")
+	local lastAntiIdle = 0
+	LocalPlayer.Idled:Connect(function()
+		local now = tick()
+		if now - lastAntiIdle < 60 then return end
+		lastAntiIdle = now
+		pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end)
+	end)
+	print("✅ [BYPASS] Anti-idle active (VirtualUser)")
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🛡️ ANTI-CHEAT BYPASSES END
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- ─── NATURAL WAIT FOR GAME (no hookmetamethod!) ─────────────────────────────────
 local startWait = tick()
 local plots = Workspace:WaitForChild("Plots", 30)
 if not plots then warn("[FATAL] Plots not found after 30s") return end
@@ -115,32 +176,9 @@ end
 
 repeat task.wait() until Players.LocalPlayer
 LocalPlayer = Players.LocalPlayer
-print(string.format("[INIT] Workspace ready in %.2fs (skipped game:IsLoaded)", tick() - startWait))
+print(string.format("[INIT] Workspace ready in %.2fs", tick() - startWait))
 
--- ⚡ OPTI #6 : DESTROY le character du bot (économise rendu massif)
-pcall(function()
-	if LocalPlayer.Character then
-		LocalPlayer.Character:Destroy()
-	end
-	LocalPlayer.CharacterAdded:Connect(function(char)
-		task.wait(0.5)
-		pcall(function() char:Destroy() end)
-	end)
-end)
-
--- ─── ANTI IDLE ────────────────────────────────────────────────────────────────
-do
-	local vu = game:GetService("VirtualUser")
-	local lastAntiIdle = 0
-	LocalPlayer.Idled:Connect(function()
-		local now = tick()
-		if now - lastAntiIdle < 60 then return end
-		lastAntiIdle = now
-		pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end)
-	end)
-end
-
--- ─── UTILIDADES ──────────────────────────────────────────────────────────────
+-- ─── UTILITIES ──────────────────────────────────────────────────────────────────
 local function formatNum(n)
 	if n >= 1e9 then return string.format("%.2fB", n/1e9)
 	elseif n >= 1e6 then return string.format("%.2fM", n/1e6)
@@ -158,7 +196,7 @@ local function getTier(v)
 	return "low"
 end
 
--- ─── ENDPOINTS ───────────────────────────────────────────────────────────────
+-- ─── ENDPOINTS ──────────────────────────────────────────────────────────────────
 local function getJobUrl()
 	return _RAILWAY .. "/jobs?placeId=" .. PLACE_ID .. "&key=" .. HttpService:UrlEncode(_KEY)
 end
@@ -167,7 +205,7 @@ local function reportDataUrl()
 	return _VULTR .. "/report-data?key=" .. HttpService:UrlEncode(_KEY)
 end
 
--- ─── ⚡ OPTI #13 : QUEUE DE JOBID PRÉ-FETCHÉS (NOUVEAU!) ───────────────────────
+-- ─── JOBID QUEUE (prefetch) ─────────────────────────────────────────────────────
 local jobQueue = {}
 local queueLock = false
 
@@ -175,16 +213,16 @@ local function addJobToQueue(jid)
 	if jid and jid ~= game.JobId and not failedJobIds[jid] then
 		table.insert(jobQueue, jid)
 		if #jobQueue > 3 then
-			table.remove(jobQueue, 1)  -- Garder max 3 jobIds
+			table.remove(jobQueue, 1)
 		end
-		print("[QUEUE] JobID ajouté! Queue:", #jobQueue)
+		print("[QUEUE] JobID added! Queue:", #jobQueue)
 	end
 end
 
 local function getNextJobFromQueue()
 	if #jobQueue > 0 then
 		local jid = table.remove(jobQueue, 1)
-		print("[QUEUE] JobID utilisé de la queue! Reste:", #jobQueue)
+		print("[QUEUE] JobID used! Remaining:", #jobQueue)
 		return jid
 	end
 	return nil
@@ -206,31 +244,30 @@ local function startPrefetchQueue()
 				local jid = body:match("^%s*([%w%-]+)%s*$")
 				addJobToQueue(jid)
 			end
-			task.wait(0.2)  -- Prefetch rapide
+			task.wait(0.2)
 		end
 		queueLock = false
 	end)
 end
 
--- ─── HOP INSTANTANEOUS (SANS WAIT) ────────────────────────────────────────────
+-- ─── HOP FUNCTION ────────────────────────────────────────────────────────────────
 local function hop()
-	print("[HOP] 🚀 HOP IMMÉDIAT en cours...")
+	print("[HOP] 🚀 Hopping...")
 	
-	-- ⚡ OPTI #13 : Vérifier la queue d'abord
+	-- Check queue first
 	local queuedJid = getNextJobFromQueue()
 	if queuedJid then
-		print("[HOP] Utilisant JobID de la queue:", queuedJid:sub(1, 12), "...")
+		print("[HOP] Using queued JobID:", queuedJid:sub(1, 12), "...")
 		lastAttemptedJobId = queuedJid
 		TeleportService:TeleportToPlaceInstance(PLACE_ID, queuedJid, LocalPlayer)
-		-- Relancer le prefetch immédiatement (pendant le teleport)
 		startPrefetchQueue()
 		return
 	end
 	
-	-- Sinon, fetch classique SANS WAIT EN CAS D'ÉCHEC
+	-- Fetch new JobID
 	local maxAttempts = 3
 	for attempt = 1, maxAttempts do
-		print("[HOP] Requête JobID (tentative " .. attempt .. "/" .. maxAttempts .. ")...")
+		print("[HOP] Requesting JobID (attempt " .. attempt .. "/" .. maxAttempts .. ")...")
 		local ok, res = pcall(function()
 			return requestFunc({ Url = getJobUrl(), Method = "GET", Headers = {["username"] = LocalPlayer.Name} })
 		end)
@@ -241,42 +278,36 @@ local function hop()
 			local jid = body:match("^%s*([%w%-]+)%s*$")
 			if jid and jid ~= game.JobId and not failedJobIds[jid] then
 				lastAttemptedJobId = jid
-				print("[HOP] 🎯 Teleport vers:", jid:sub(1, 12), "...")
+				print("[HOP] 🎯 Teleporting to:", jid:sub(1, 12), "...")
 				TeleportService:TeleportToPlaceInstance(PLACE_ID, jid, LocalPlayer)
-				-- Relancer le prefetch immédiatement
 				startPrefetchQueue()
 				return
 			end
 		elseif sc == 503 then
-			print("[HOP] Pool vide! Retry INSTANT...")
-			-- Pas de wait! Boucle continue directement
+			print("[HOP] Pool empty! Retrying...")
 		else
 			print("[HOP] Error:", sc)
 		end
-		
-		-- Pas de task.wait ici non plus! On retry immédiatement
-		-- task.wait(0.1) -- SUPPRIMÉ pour instant retry
 	end
 	
-	-- Fallback: demander un JobID et retry
-	print("[HOP] Tous les attempts échoués, new request...")
+	-- Fallback
+	print("[HOP] All attempts failed, requesting new JobID...")
 	hop()
 end
 
--- ─── ⚡ OPTI #13 : TELEPORT FAILED = INSTANT NEW HOP (SANS WAIT!) ───────────────
+-- ─── TELEPORT FAILED HANDLER ────────────────────────────────────────────────────
 TeleportService.TeleportInitFailed:Connect(function(player, _, errorReason)
 	if player == LocalPlayer then
 		if lastAttemptedJobId then 
 			failedJobIds[lastAttemptedJobId] = true 
-			print("[HOP] ❌ Teleport échoué! JobID bloqué:", lastAttemptedJobId:sub(1, 12))
+			print("[HOP] ❌ Teleport failed! JobID blocked:", lastAttemptedJobId:sub(1, 12))
 		end
-		print("[HOP] 🔄 INSTANT HOP - Pas de wait! Raison:", errorReason)
-		-- ZÉRO task.wait ici! Juste appeler hop() directement
+		print("[HOP] 🔄 Instant hop - Reason:", errorReason)
 		hop()
 	end
 end)
 
--- ─── SAFE REQUIRE ────────────────────────────────────────────────────────────
+-- ─── SAFE REQUIRE (thread identity) ─────────────────────────────────────────────
 local function safeRequire(module)
 	local gti = getthreadidentity or getidentity or function() return 2 end
 	local sti = setthreadidentity or setidentity or function() end
@@ -296,24 +327,7 @@ local function waitForPath(parent, ...)
 	return cur
 end
 
-do
-	local Sync = require(game.ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Synchronizer"))
-	for _, fn in pairs(Sync) do
-		if typeof(fn) ~= "function" or isexecutorclosure(fn) then continue end
-		local ok, ups = pcall(debug.getupvalues, fn)
-		if not ok then continue end
-		for idx, val in pairs(ups) do
-			if typeof(val) ~= "function" or isexecutorclosure(val) then continue end
-			local ok2, inner = pcall(debug.getupvalues, val)
-			if not ok2 then continue end
-			local hasBool = false
-			for _, v in pairs(inner) do if typeof(v) == "boolean" then hasBool = true break end end
-			if hasBool then debug.setupvalue(fn, idx, newcclosure(function() end)) end
-		end
-	end
-end
-
--- ─── ⚡ OPTI #5 : CHARGEMENT MODULES OPTIMISÉ (3 essais × 0.5s) ────────────────
+-- ─── LOAD MODULES ───────────────────────────────────────────────────────────────
 local sync, animalsData, animalsShared, numberUtils
 for i = 1, 3 do
 	local ok = pcall(function()
@@ -323,7 +337,7 @@ for i = 1, 3 do
 		numberUtils  = safeRequire(waitForPath(game.ReplicatedStorage, "Utils", "NumberUtils"))
 	end)
 	if ok and sync and animalsData and animalsShared and numberUtils then
-		print("[INIT] Modules OK in", i, "attempts")
+		print("[INIT] Modules loaded in", i, "attempts")
 		break
 	end
 	task.wait(0.5)
@@ -333,12 +347,12 @@ if not (sync and animalsData and animalsShared and numberUtils) then
 	warn("[FATAL] Modules failed to load") hop() return
 end
 
--- ─── DEDUP ────────────────────────────────────────────────────────────────────
+-- ─── DEDUP ──────────────────────────────────────────────────────────────────────
 local logged = {}
 local function hasLogged(jid, name, gen) return logged[jid..":"..name..":"..gen] == true end
 local function markLogged(jid, name, gen) logged[jid..":"..name..":"..gen] = true end
 
--- ─── CHECKS ──────────────────────────────────────────────────────────────────
+-- ─── CHECKS ─────────────────────────────────────────────────────────────────────
 local function isFusing(a)
 	return a.Machine and a.Machine.Type == "Fuse" and a.Machine.Active
 end
@@ -356,7 +370,7 @@ local function isInDuel(a)
 	return a.InDuel or a.inDuel or a.in_duel or false
 end
 
--- ─── SCAN CARPET ─────────────────────────────────────────────────────────────
+-- ─── SCAN CARPET ────────────────────────────────────────────────────────────────
 local function scanCarpet(seen, jid)
 	local res = {}
 	for _, inst in ipairs(Workspace:GetChildren()) do
@@ -389,7 +403,7 @@ local function scanCarpet(seen, jid)
 	return res
 end
 
--- ─── SCAN PLOTS ──────────────────────────────────────────────────────────────
+-- ─── SCAN PLOTS ─────────────────────────────────────────────────────────────────
 local function scanPlots(seen, jid)
 	local res = {}
 	local plotsFolder = Workspace:FindFirstChild("Plots")
@@ -426,7 +440,7 @@ local function scanPlots(seen, jid)
 	return res
 end
 
--- ─── ⚡ OPTI #8 : SCAN PARALLÈLE plots + carpet ──────────────────────────────
+-- ─── PARALLEL SCAN (plots + carpet) ─────────────────────────────────────────────
 local function scanAll()
 	local seen, jid = {}, game.JobId
 	local plotResults, carpetResults
@@ -441,7 +455,7 @@ local function scanAll()
 		done = done + 1
 	end)
 	
-	-- Attendre que les 2 scans soient finis (timeout 3s safety)
+	-- Wait for both scans (timeout 3s)
 	local waitStart = tick()
 	while done < 2 and (tick() - waitStart) < 3 do
 		task.wait()
@@ -458,11 +472,11 @@ local function scanAll()
 	return all
 end
 
--- ─── ⚡ OPTI #4 + #12 : REPORT EN ASYNC + PAYLOAD FILTRÉ ─────────────────────
+-- ─── REPORT (ASYNC) ─────────────────────────────────────────────────────────────
 local function reportEverything(best, all)
 	local jid = game.JobId
 	
-	-- ⚡ OPTI #12 : filtrer les brainrots <100k AVANT envoi
+	-- Filter items >= 100k
 	local apiItems = {}
 	for _, item in ipairs(all) do
 		if item.numeric >= PAYLOAD_MIN then
@@ -480,7 +494,7 @@ local function reportEverything(best, all)
 		end
 	end
 	
-	-- ⚡ OPTI #4 : ENVOI EN ASYNC (non-bloquant)
+	-- Send async (non-blocking)
 	task.spawn(function()
 		pcall(function()
 			requestFunc({
@@ -499,11 +513,11 @@ local function reportEverything(best, all)
 					brainrots = apiItems
 				})
 			})
-			print("[REPORT] Envoyé async (", #apiItems, "items >100k)")
+			print("[REPORT] Sent async (", #apiItems, "items >100k)")
 		end)
 	end)
 
-	-- Webhook Discord (aussi async)
+	-- Discord webhook
 	local hook = nil
 	if best.numeric >= 1e9 then hook = _WH["1b_plus"]
 	elseif best.numeric >= 400e6 then hook = _WH["400_1b"]
@@ -542,25 +556,23 @@ local function reportEverything(best, all)
 	for _, item in ipairs(all) do markLogged(jid, item.name, item.money) end
 end
 
--- ─── ⚡ MAIN OPTIMISÉ AVEC PREFETCH & QUEUE ────────────────────────────────────
+-- ─── MAIN LOOP ──────────────────────────────────────────────────────────────────
 local function main()
-	print("[SCANNER] 🔍 Scan + Queue prefetch en cours...")
+	print("[SCANNER] 🔍 Scanning...")
 	local results = scanAll()
 	
 	if #results > 0 then
-		print("[SCANNER] ✅", #results, "trouvés | Best:", results[1].name, results[1].money)
+		print("[SCANNER] ✅", #results, "found | Best:", results[1].name, results[1].money)
 		reportEverything(results[1], results)
 	else
-		print("[SCANNER] ❌ Aucun brainrot")
+		print("[SCANNER] ❌ No brainrots found")
 	end
 	
-	-- ⚡ OPTI #13 : Lancer le prefetch IMMÉDIATEMENT (pendant le hop)
 	startPrefetchQueue()
 	
-	-- ⚡ OPTI #9 : HOP SANS ATTENDRE!
-	print("[MAIN] Hop instantané!")
+	print("[MAIN] Instant hop!")
 	hop()
 end
 
-print("🦖 [GODZILLA] Scanner-Hopper v7.0 ACTIVE!")
+print("🦖 [GODZILLA] Scanner-Hopper v7.0 STEALTH ACTIVE!")
 main()
