@@ -146,19 +146,6 @@ pcall(function()
 	print("✅ [BYPASS] Character auto-destroy enabled")
 end)
 
--- ⚡ BYPASS #9 : ANTI-IDLE (VirtualUser API - OFFICIAL)
-do
-	local vu = game:GetService("VirtualUser")
-	local lastAntiIdle = 0
-	LocalPlayer.Idled:Connect(function()
-		local now = tick()
-		if now - lastAntiIdle < 60 then return end
-		lastAntiIdle = now
-		pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end)
-	end)
-	print("✅ [BYPASS] Anti-idle active (VirtualUser)")
-end
-
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- 🛡️ ANTI-CHEAT BYPASSES END
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -177,6 +164,19 @@ end
 repeat task.wait() until Players.LocalPlayer
 LocalPlayer = Players.LocalPlayer
 print(string.format("[INIT] Workspace ready in %.2fs", tick() - startWait))
+
+-- ⚡ BYPASS #9 : ANTI-IDLE (VirtualUser API - OFFICIAL) - NOW LocalPlayer is loaded!
+do
+	local vu = game:GetService("VirtualUser")
+	local lastAntiIdle = 0
+	LocalPlayer.Idled:Connect(function()
+		local now = tick()
+		if now - lastAntiIdle < 60 then return end
+		lastAntiIdle = now
+		pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end)
+	end)
+	print("✅ [BYPASS] Anti-idle active (VirtualUser)")
+end
 
 -- ─── UTILITIES ──────────────────────────────────────────────────────────────────
 local function formatNum(n)
